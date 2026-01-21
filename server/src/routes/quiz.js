@@ -1,15 +1,22 @@
 import { Router } from 'express';
 import { prisma } from '../index.js';
+import { requireAuth, optionalAuth } from '../middleware/auth.js';
 
 const router = Router();
 
-// Récupérer tous les quiz
-router.get('/', async (req, res) => {
+// Récupérer tous les quiz (filtrés par utilisateur si connecté)
+router.get('/', optionalAuth, async (req, res) => {
   try {
+    const whereClause = req.user ? { userId: req.user.id } : {};
+
     const quizzes = await prisma.quiz.findMany({
+      where: whereClause,
       include: {
         _count: {
           select: { questions: true }
+        },
+        user: {
+          select: { name: true, picture: true }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -49,8 +56,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Créer un nouveau quiz
-router.post('/', async (req, res) => {
+// Créer un nouveau quiz (authentification requise)
+router.post('/', requireAuth, async (req, res) => {
   try {
     const { title, description, questions } = req.body;
 
@@ -62,6 +69,7 @@ router.post('/', async (req, res) => {
       data: {
         title,
         description,
+        userId: req.user.id,
         questions: {
           create: questions.map((q, qIndex) => ({
             text: q.text,
@@ -97,10 +105,24 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Mettre à jour un quiz
-router.put('/:id', async (req, res) => {
+// Mettre à jour un quiz (authentification + propriétaire requis)
+router.put('/:id', requireAuth, async (req, res) => {
   try {
     const { title, description, questions } = req.body;
+
+    // Vérifier que l'utilisateur est propriétaire
+    const existingQuiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id },
+      select: { userId: true }
+    });
+
+    if (!existingQuiz) {
+      return res.status(404).json({ error: 'Quiz non trouvé' });
+    }
+
+    if (existingQuiz.userId && existingQuiz.userId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Non autorisé à modifier ce quiz' });
+    }
 
     // Supprimer les anciennes questions
     await prisma.question.deleteMany({
@@ -148,9 +170,23 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Supprimer un quiz
-router.delete('/:id', async (req, res) => {
+// Supprimer un quiz (authentification + propriétaire requis)
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
+    // Vérifier que l'utilisateur est propriétaire
+    const existingQuiz = await prisma.quiz.findUnique({
+      where: { id: req.params.id },
+      select: { userId: true }
+    });
+
+    if (!existingQuiz) {
+      return res.status(404).json({ error: 'Quiz non trouvé' });
+    }
+
+    if (existingQuiz.userId && existingQuiz.userId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Non autorisé à supprimer ce quiz' });
+    }
+
     await prisma.quiz.delete({
       where: { id: req.params.id }
     });

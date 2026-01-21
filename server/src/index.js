@@ -2,12 +2,15 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { PrismaClient } from '@prisma/client';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import quizRoutes from './routes/quiz.js';
 import gameRoutes from './routes/game.js';
+import authRoutes from './routes/auth.js';
 import { setupSocketHandlers } from './socket/handlers.js';
+import passport, { configurePassport } from './config/passport.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,11 +26,24 @@ const io = new Server(httpServer, {
 
 export const prisma = new PrismaClient();
 
+// Configuration CORS avec credentials
+const corsOptions = {
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE']
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
+app.use(cookieParser());
 app.use(express.json());
 
+// Configuration Passport
+configurePassport();
+app.use(passport.initialize());
+
 // Routes API
+app.use('/api/auth', authRoutes);
 app.use('/api/quiz', quizRoutes);
 app.use('/api/game', gameRoutes);
 

@@ -4,16 +4,19 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { SocketProvider } from './context/SocketContext';
 import { SoundProvider } from './context/SoundContext';
+import { AuthProvider } from './context/AuthContext';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <SocketProvider>
-        <SoundProvider>
-          <App />
-        </SoundProvider>
-      </SocketProvider>
+      <AuthProvider>
+        <SocketProvider>
+          <SoundProvider>
+            <App />
+          </SoundProvider>
+        </SocketProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

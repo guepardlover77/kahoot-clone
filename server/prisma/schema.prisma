@@ -10,12 +10,25 @@ datasource db {
 // Note: SQLite ne supporte pas les enums, on utilise String
 // Types valides: MULTIPLE_CHOICE, TRUE_FALSE, SURVEY, PUZZLE, DRAG_DROP
 
+model User {
+  id        String   @id @default(cuid())
+  googleId  String   @unique
+  email     String   @unique
+  name      String
+  picture   String?
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  quizzes   Quiz[]
+}
+
 model Quiz {
   id          String     @id @default(cuid())
   title       String
   description String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id])
   questions   Question[]
   games       Game[]
 }
