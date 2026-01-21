@@ -68,8 +68,11 @@ router.post('/', async (req, res) => {
             timeLimit: q.timeLimit || 20,
             points: q.points || 1000,
             order: qIndex,
+            type: q.type || 'MULTIPLE_CHOICE',
+            correctAnswer: q.correctAnswer || null,
+            caseSensitive: q.caseSensitive || false,
             answers: {
-              create: q.answers.map((a, aIndex) => ({
+              create: (q.answers || []).map((a, aIndex) => ({
                 text: a.text,
                 isCorrect: a.isCorrect || false,
                 order: aIndex
@@ -116,8 +119,11 @@ router.put('/:id', async (req, res) => {
             timeLimit: q.timeLimit || 20,
             points: q.points || 1000,
             order: qIndex,
+            type: q.type || 'MULTIPLE_CHOICE',
+            correctAnswer: q.correctAnswer || null,
+            caseSensitive: q.caseSensitive || false,
             answers: {
-              create: q.answers.map((a, aIndex) => ({
+              create: (q.answers || []).map((a, aIndex) => ({
                 text: a.text,
                 isCorrect: a.isCorrect || false,
                 order: aIndex

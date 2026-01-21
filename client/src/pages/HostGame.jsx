@@ -10,6 +10,14 @@ import SoundToggle from '../components/SoundToggle';
 const answerColors = ['bg-kahoot-red', 'bg-kahoot-blue', 'bg-kahoot-yellow', 'bg-kahoot-green'];
 const answerShapes = ['triangle', 'diamond', 'circle', 'square'];
 
+const questionTypeLabels = {
+  MULTIPLE_CHOICE: 'Choix multiple',
+  TRUE_FALSE: 'Vrai / Faux',
+  SURVEY: 'Sondage',
+  PUZZLE: 'Puzzle',
+  DRAG_DROP: 'Glisser-d\u00e9poser'
+};
+
 function HostGame() {
   const { pin } = useParams();
   const navigate = useNavigate();
@@ -128,6 +136,8 @@ function HostGame() {
     navigate('/');
   };
 
+  const questionType = question?.type || 'MULTIPLE_CHOICE';
+
   if (gameState === 'starting') {
     return (
       <div className="min-h-screen bg-kahoot-purple flex items-center justify-center relative overflow-hidden">
@@ -145,12 +155,12 @@ function HostGame() {
                 className="text-8xl font-black text-white animate-countdown"
                 key={countdownNumber}
               >
-                {countdownNumber > 0 ? countdownNumber : '🚀'}
+                {countdownNumber > 0 ? countdownNumber : '\ud83d\ude80'}
               </span>
             </div>
           </div>
 
-          <p className="text-white/60 mt-8 animate-pulse">Préparez-vous !</p>
+          <p className="text-white/60 mt-8 animate-pulse">Pr\u00e9parez-vous !</p>
         </div>
       </div>
     );
@@ -165,7 +175,7 @@ function HostGame() {
 
         <div className="max-w-3xl mx-auto text-center relative z-10">
           <h1 className="text-5xl font-bold text-white mb-8 animate-slide-down">
-            Partie terminée !
+            Partie termin\u00e9e !
           </h1>
 
           <div className="card mb-8">
@@ -180,7 +190,7 @@ function HostGame() {
                   style={{ animationDelay: '0.3s' }}
                 >
                   <div className="mb-2 animate-bounce-in" style={{ animationDelay: '0.6s' }}>
-                    <span className="text-5xl">🥈</span>
+                    <span className="text-5xl">\ud83e\udd48</span>
                   </div>
                   <div className="podium-2 h-24 rounded-t-xl flex flex-col items-center justify-center p-2">
                     <span className="text-4xl font-black text-gray-700">2</span>
@@ -199,10 +209,10 @@ function HostGame() {
                   style={{ animationDelay: '0.1s' }}
                 >
                   <div className="mb-2 animate-crown-bounce">
-                    <span className="text-6xl">👑</span>
+                    <span className="text-6xl">\ud83d\udc51</span>
                   </div>
                   <div className="mb-2 animate-bounce-in" style={{ animationDelay: '0.4s' }}>
-                    <span className="text-6xl">🥇</span>
+                    <span className="text-6xl">\ud83e\udd47</span>
                   </div>
                   <div className="podium-1 h-32 rounded-t-xl flex flex-col items-center justify-center p-2 relative">
                     <div className="absolute inset-0 rounded-t-xl bg-gradient-to-t from-yellow-600/20 to-transparent" />
@@ -222,7 +232,7 @@ function HostGame() {
                   style={{ animationDelay: '0.5s' }}
                 >
                   <div className="mb-2 animate-bounce-in" style={{ animationDelay: '0.8s' }}>
-                    <span className="text-4xl">🥉</span>
+                    <span className="text-4xl">\ud83e\udd49</span>
                   </div>
                   <div className="podium-3 h-16 rounded-t-xl flex flex-col items-center justify-center p-2">
                     <span className="text-3xl font-black text-orange-800">3</span>
@@ -252,7 +262,7 @@ function HostGame() {
                       'bg-gradient-to-br from-kahoot-purple to-purple-700'
                     }`}>
                       {player.rank <= 3 ? (
-                        <span className="text-lg">{player.rank === 1 ? '🥇' : player.rank === 2 ? '🥈' : '🥉'}</span>
+                        <span className="text-lg">{player.rank === 1 ? '\ud83e\udd47' : player.rank === 2 ? '\ud83e\udd48' : '\ud83e\udd49'}</span>
                       ) : (
                         player.rank
                       )}
@@ -270,7 +280,7 @@ function HostGame() {
             className="btn btn-primary btn-glow ripple text-lg px-8 animate-fade-in"
             style={{ animationDelay: '1.5s' }}
           >
-            Retour à l'accueil
+            Retour \u00e0 l'accueil
           </button>
         </div>
       </div>
@@ -278,6 +288,8 @@ function HostGame() {
   }
 
   if (gameState === 'results') {
+    const resultsType = results?.type || 'MULTIPLE_CHOICE';
+
     return (
       <div className="min-h-screen bg-kahoot-purple p-4 relative overflow-hidden">
         <SoundToggle className="absolute top-4 right-4 z-20" />
@@ -285,55 +297,123 @@ function HostGame() {
 
         <div className="max-w-4xl mx-auto relative z-10">
           <div className="text-center mb-6">
-            <p className="text-white/60 animate-fade-in">Question {question?.index + 1} / {question?.total}</p>
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <p className="text-white/60 animate-fade-in">Question {question?.index + 1} / {question?.total}</p>
+              <span className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-medium">
+                {questionTypeLabels[resultsType]}
+              </span>
+            </div>
             <h2 className="text-3xl font-bold text-white mt-2 animate-slide-down">{question?.text}</h2>
           </div>
 
-          {/* Answer statistics */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            {question?.answers.map((answer, i) => {
-              const isCorrect = results?.correctAnswers.includes(i);
-              const stat = results?.answerStats.find(s => s.index === i);
-              const percentage = answerCount.count > 0
-                ? Math.round((stat?.count || 0) / answerCount.count * 100)
-                : 0;
+          {/* R\u00e9sultats selon le type */}
+          {(resultsType === 'MULTIPLE_CHOICE' || resultsType === 'TRUE_FALSE' || resultsType === 'SURVEY') && (
+            <div className={`grid ${resultsType === 'TRUE_FALSE' ? 'grid-cols-2' : 'grid-cols-2'} gap-4 mb-8`}>
+              {question?.answers.map((answer, i) => {
+                const isCorrect = results?.correctAnswers?.includes(i);
+                const isSurvey = resultsType === 'SURVEY';
+                const stat = results?.answerStats?.find(s => s.index === i);
+                const percentage = answerCount.count > 0
+                  ? Math.round((stat?.count || 0) / answerCount.count * 100)
+                  : 0;
 
-              return (
-                <div
-                  key={i}
-                  className={`${answerColors[i]} ${!isCorrect ? 'opacity-50 scale-95' : 'animate-correct-pulse'}
-                    rounded-xl p-4 relative transition-all duration-500 animate-fade-in`}
-                  style={{ animationDelay: `${i * 0.1}s` }}
-                >
-                  <div className="flex items-center gap-3">
-                    <Shape type={answerShapes[i]} />
-                    <span className="text-white font-bold text-lg flex-1">{answer.text}</span>
-                    {isCorrect && (
-                      <div className="animate-bounce-in">
-                        <svg className="w-8 h-8 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                return (
+                  <div
+                    key={i}
+                    className={`${answerColors[i % 4]} ${!isSurvey && !isCorrect ? 'opacity-50 scale-95' : ''} ${!isSurvey && isCorrect ? 'animate-correct-pulse' : ''}
+                      rounded-xl p-4 relative transition-all duration-500 animate-fade-in`}
+                    style={{ animationDelay: `${i * 0.1}s` }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Shape type={answerShapes[i % 4]} />
+                      <span className="text-white font-bold text-lg flex-1">{answer.text}</span>
+                      {!isSurvey && isCorrect && (
+                        <div className="animate-bounce-in">
+                          <svg className="w-8 h-8 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Answer bar */}
+                    <div className="mt-3">
+                      <div className="flex justify-between text-white/80 text-sm mb-1">
+                        <span>{stat?.count || 0} r\u00e9ponse{(stat?.count || 0) > 1 ? 's' : ''}</span>
+                        <span>{percentage}%</span>
                       </div>
-                    )}
+                      <div className="h-2 bg-black/20 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-white/50 rounded-full transition-all duration-1000"
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  {/* Answer bar */}
-                  <div className="mt-3">
-                    <div className="flex justify-between text-white/80 text-sm mb-1">
-                      <span>{stat?.count || 0} réponse{(stat?.count || 0) > 1 ? 's' : ''}</span>
-                      <span>{percentage}%</span>
-                    </div>
-                    <div className="h-2 bg-black/20 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-white/50 rounded-full transition-all duration-1000"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                  </div>
+          {/* R\u00e9sultats PUZZLE */}
+          {resultsType === 'PUZZLE' && (
+            <div className="mb-8">
+              <div className="card p-6 animate-zoom-in">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">R\u00e9ponse correcte</h3>
+                <div className="bg-kahoot-green/20 border-2 border-kahoot-green rounded-xl p-4 mb-4">
+                  <p className="text-2xl font-bold text-kahoot-green text-center">{results?.correctAnswer}</p>
                 </div>
-              );
-            })}
-          </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {results?.answerStats?.map((stat, i) => (
+                    <div
+                      key={i}
+                      className={`p-4 rounded-xl ${i === 0 ? 'bg-kahoot-green/20' : 'bg-kahoot-red/20'}`}
+                    >
+                      <p className="text-lg font-bold text-gray-800">{stat.text}</p>
+                      <p className="text-3xl font-black text-gray-800">{stat.count}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* R\u00e9sultats DRAG_DROP */}
+          {resultsType === 'DRAG_DROP' && (
+            <div className="mb-8">
+              <div className="card p-6 animate-zoom-in">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">Ordre correct</h3>
+                <div className="space-y-2 mb-4">
+                  {question?.answers?.map((answer, i) => (
+                    <div key={i} className={`${answerColors[i % 4]} rounded-lg p-3 flex items-center gap-3`}>
+                      <span className="text-white font-bold w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      <span className="text-white font-bold">{answer.text}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {results?.answerStats?.map((stat, i) => (
+                    <div
+                      key={i}
+                      className={`p-4 rounded-xl ${i === 0 ? 'bg-kahoot-green/20' : 'bg-kahoot-red/20'}`}
+                    >
+                      <p className="text-lg font-bold text-gray-800">{stat.text}</p>
+                      <p className="text-3xl font-black text-gray-800">{stat.count}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Note pour les sondages */}
+          {resultsType === 'SURVEY' && (
+            <div className="text-center text-white/60 mb-4 animate-fade-in">
+              <p>Sondage - Pas de bonne r\u00e9ponse</p>
+            </div>
+          )}
 
           {/* Leaderboard */}
           <div className="card animate-slide-up" style={{ animationDelay: '0.4s' }}>
@@ -373,7 +453,7 @@ function HostGame() {
               className="btn btn-success text-xl px-12 btn-glow ripple animate-fade-in"
               style={{ animationDelay: '0.8s' }}
             >
-              {results?.isLastQuestion ? 'Voir les résultats finaux' : 'Question suivante'}
+              {results?.isLastQuestion ? 'Voir les r\u00e9sultats finaux' : 'Question suivante'}
               <svg className="w-6 h-6 ml-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
               </svg>
@@ -403,9 +483,14 @@ function HostGame() {
       <div className="max-w-4xl mx-auto relative z-10">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
-          <span className="text-white/60 bg-white/10 px-4 py-2 rounded-full animate-fade-in">
-            Question {question?.index + 1} / {question?.total}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-white/60 bg-white/10 px-4 py-2 rounded-full animate-fade-in">
+              Question {question?.index + 1} / {question?.total}
+            </span>
+            <span className="bg-kahoot-purple/50 text-white px-3 py-2 rounded-full text-sm font-medium animate-fade-in">
+              {questionTypeLabels[questionType]}
+            </span>
+          </div>
           <div className="flex items-center gap-4">
             <div className="bg-white/10 px-4 py-2 rounded-full animate-fade-in" style={{ animationDelay: '0.1s' }}>
               <span className="text-white flex items-center gap-2">
@@ -429,7 +514,7 @@ function HostGame() {
           {/* Progress indicator */}
           <div className="mt-4 max-w-md mx-auto">
             <div className="flex justify-between text-white/60 text-sm mb-2">
-              <span>Réponses</span>
+              <span>R\u00e9ponses</span>
               <span>{Math.round((answerCount.count / Math.max(answerCount.total, 1)) * 100)}%</span>
             </div>
             <div className="progress-bar">
@@ -441,20 +526,61 @@ function HostGame() {
           </div>
         </div>
 
-        {/* Answers grid */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          {question?.answers.map((answer, i) => (
-            <div
-              key={i}
-              className={`${answerColors[i]} rounded-xl p-6 flex items-center gap-4 animate-scale-in shadow-lg
-                hover:brightness-110 transition-all duration-200`}
-              style={{ animationDelay: `${i * 0.1}s` }}
-            >
-              <Shape type={answerShapes[i]} />
-              <span className="text-white font-bold text-xl">{answer.text}</span>
+        {/* Affichage selon le type */}
+        {(questionType === 'MULTIPLE_CHOICE' || questionType === 'SURVEY') && (
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            {question?.answers.map((answer, i) => (
+              <div
+                key={i}
+                className={`${answerColors[i]} rounded-xl p-6 flex items-center gap-4 animate-scale-in shadow-lg
+                  hover:brightness-110 transition-all duration-200`}
+                style={{ animationDelay: `${i * 0.1}s` }}
+              >
+                <Shape type={answerShapes[i]} />
+                <span className="text-white font-bold text-xl">{answer.text}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {questionType === 'TRUE_FALSE' && (
+          <div className="grid grid-cols-2 gap-6 mb-8">
+            <div className="bg-kahoot-green rounded-xl p-8 flex items-center justify-center animate-scale-in shadow-lg">
+              <span className="text-white font-bold text-3xl">Vrai</span>
             </div>
-          ))}
-        </div>
+            <div className="bg-kahoot-red rounded-xl p-8 flex items-center justify-center animate-scale-in shadow-lg" style={{ animationDelay: '0.1s' }}>
+              <span className="text-white font-bold text-3xl">Faux</span>
+            </div>
+          </div>
+        )}
+
+        {questionType === 'PUZZLE' && (
+          <div className="mb-8">
+            <div className="glass-card p-8 text-center animate-zoom-in">
+              <div className="text-6xl mb-4">\ud83e\udde9</div>
+              <p className="text-white text-xl">Les joueurs tapent leur r\u00e9ponse...</p>
+              <p className="text-white/60 mt-2">R\u00e9ponse attendue : {question?.correctAnswer}</p>
+            </div>
+          </div>
+        )}
+
+        {questionType === 'DRAG_DROP' && (
+          <div className="mb-8">
+            <div className="glass-card p-6 animate-zoom-in">
+              <p className="text-white text-center mb-4">Ordre correct :</p>
+              <div className="space-y-2">
+                {question?.answers.map((answer, i) => (
+                  <div key={i} className={`${answerColors[i % 4]} rounded-lg p-3 flex items-center gap-3`}>
+                    <span className="text-white font-bold w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+                      {i + 1}
+                    </span>
+                    <span className="text-white font-bold">{answer.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Show results button */}
         {timeLeft === 0 && (
@@ -463,7 +589,7 @@ function HostGame() {
               onClick={showResults}
               className="btn btn-primary text-xl px-12 btn-glow ripple"
             >
-              Afficher les résultats
+              Afficher les r\u00e9sultats
               <svg className="w-6 h-6 ml-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>

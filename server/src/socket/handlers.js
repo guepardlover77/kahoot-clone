@@ -1,5 +1,46 @@
 import { prisma, activeGames } from '../index.js';
 
+// Fonctions de scoring par type de question
+function calculateScore(question, answer, answerTime) {
+  const timeRatio = Math.max(0, 1 - (answerTime / (question.timeLimit * 1000)));
+  const basePoints = question.points;
+
+  switch (question.type) {
+    case 'SURVEY':
+      // Les sondages ne donnent pas de points
+      return { isCorrect: true, points: 0 };
+
+    case 'TRUE_FALSE':
+    case 'MULTIPLE_CHOICE': {
+      const isCorrect = question.answers[answer.answerIndex]?.isCorrect || false;
+      const points = isCorrect ? Math.round(basePoints * (0.5 + 0.5 * timeRatio)) : 0;
+      return { isCorrect, points };
+    }
+
+    case 'PUZZLE': {
+      const playerAnswer = (answer.textAnswer || '').trim();
+      const correctAnswer = (question.correctAnswer || '').trim();
+      const isCorrect = question.caseSensitive
+        ? playerAnswer === correctAnswer
+        : playerAnswer.toLowerCase() === correctAnswer.toLowerCase();
+      const points = isCorrect ? Math.round(basePoints * (0.5 + 0.5 * timeRatio)) : 0;
+      return { isCorrect, points };
+    }
+
+    case 'DRAG_DROP': {
+      const orderedItems = answer.orderedItems || [];
+      const correctOrder = question.answers.map(a => a.text);
+      const isCorrect = orderedItems.length === correctOrder.length &&
+        orderedItems.every((item, i) => item === correctOrder[i]);
+      const points = isCorrect ? Math.round(basePoints * (0.5 + 0.5 * timeRatio)) : 0;
+      return { isCorrect, points };
+    }
+
+    default:
+      return { isCorrect: false, points: 0 };
+  }
+}
+
 export function setupSocketHandlers(io) {
   io.on('connection', (socket) => {
     console.log('Nouvelle connexion:', socket.id);
@@ -107,7 +148,7 @@ export function setupSocketHandlers(io) {
     });
 
     // Joueur: soumettre une réponse
-    socket.on('player:answer', ({ pin, answerIndex }) => {
+    socket.on('player:answer', ({ pin, answerIndex, textAnswer, orderedItems }) => {
       const game = activeGames.get(pin);
       if (!game) return;
 
@@ -124,21 +165,24 @@ export function setupSocketHandlers(io) {
       }
 
       const answerTime = Date.now() - game.questionStartTime;
-      const isCorrect = question.answers[answerIndex]?.isCorrect || false;
 
-      // Calculer les points (plus rapide = plus de points)
-      let points = 0;
-      if (isCorrect) {
-        const timeRatio = Math.max(0, 1 - (answerTime / (question.timeLimit * 1000)));
-        points = Math.round(question.points * (0.5 + 0.5 * timeRatio));
-        player.score += points;
-        player.streak++;
-      } else {
-        player.streak = 0;
+      // Calculer le score en fonction du type de question
+      const { isCorrect, points } = calculateScore(question, { answerIndex, textAnswer, orderedItems }, answerTime);
+
+      // Mettre à jour le score et la série (sauf pour SURVEY)
+      if (question.type !== 'SURVEY') {
+        if (isCorrect) {
+          player.score += points;
+          player.streak++;
+        } else {
+          player.streak = 0;
+        }
       }
 
       game.answers.set(`${socket.id}-${questionIndex}`, {
         answerIndex,
+        textAnswer,
+        orderedItems,
         isCorrect,
         points,
         time: answerTime
@@ -147,6 +191,8 @@ export function setupSocketHandlers(io) {
       player.answers.push({
         questionIndex,
         answerIndex,
+        textAnswer,
+        orderedItems,
         isCorrect,
         points
       });
@@ -155,7 +201,8 @@ export function setupSocketHandlers(io) {
       socket.emit('player:answered', {
         isCorrect,
         points,
-        totalScore: player.score
+        totalScore: player.score,
+        isSurvey: question.type === 'SURVEY'
       });
 
       // Notifier l'hôte du nombre de réponses
@@ -237,18 +284,31 @@ function sendNextQuestion(io, pin) {
     total: game.quiz.questions.length,
     text: question.text,
     timeLimit: question.timeLimit,
+    type: question.type || 'MULTIPLE_CHOICE',
     answers: question.answers.map((a, i) => ({
       index: i,
       text: a.text
     }))
   };
 
+  // Pour DRAG_DROP, mélanger les réponses pour le joueur
+  if (question.type === 'DRAG_DROP') {
+    playerQuestion.answers = [...playerQuestion.answers].sort(() => Math.random() - 0.5);
+  }
+
   // Envoyer à l'hôte (avec les réponses correctes)
   const hostQuestion = {
     ...playerQuestion,
+    // Restaurer l'ordre original des réponses pour l'hôte
+    answers: question.answers.map((a, i) => ({
+      index: i,
+      text: a.text
+    })),
     correctAnswers: question.answers
       .map((a, i) => a.isCorrect ? i : -1)
-      .filter(i => i >= 0)
+      .filter(i => i >= 0),
+    correctAnswer: question.correctAnswer, // Pour PUZZLE
+    caseSensitive: question.caseSensitive
   };
 
   io.to(`host:${pin}`).emit('question:show', hostQuestion);
@@ -271,20 +331,53 @@ function showQuestionResults(io, pin) {
 
   const questionIndex = game.currentQuestionIndex;
   const question = game.quiz.questions[questionIndex];
+  const questionType = question.type || 'MULTIPLE_CHOICE';
 
   // Calculer les statistiques des réponses
-  const answerStats = question.answers.map((_, i) => ({
-    index: i,
-    count: 0
-  }));
+  let answerStats = [];
 
-  game.answers.forEach((answer, key) => {
-    if (key.endsWith(`-${questionIndex}`)) {
-      if (answerStats[answer.answerIndex]) {
-        answerStats[answer.answerIndex].count++;
+  if (questionType === 'MULTIPLE_CHOICE' || questionType === 'TRUE_FALSE' || questionType === 'SURVEY') {
+    answerStats = question.answers.map((_, i) => ({
+      index: i,
+      count: 0
+    }));
+
+    game.answers.forEach((answer, key) => {
+      if (key.endsWith(`-${questionIndex}`)) {
+        if (answerStats[answer.answerIndex]) {
+          answerStats[answer.answerIndex].count++;
+        }
       }
-    }
-  });
+    });
+  } else if (questionType === 'PUZZLE') {
+    // Pour PUZZLE, compter les bonnes/mauvaises réponses
+    let correctCount = 0;
+    let wrongCount = 0;
+    game.answers.forEach((answer, key) => {
+      if (key.endsWith(`-${questionIndex}`)) {
+        if (answer.isCorrect) correctCount++;
+        else wrongCount++;
+      }
+    });
+    answerStats = [
+      { index: 0, text: 'Correct', count: correctCount },
+      { index: 1, text: 'Incorrect', count: wrongCount }
+    ];
+  } else if (questionType === 'DRAG_DROP') {
+    // Pour DRAG_DROP, compter les bonnes/mauvaises réponses
+    let correctCount = 0;
+    let wrongCount = 0;
+    game.answers.forEach((answer, key) => {
+      if (key.endsWith(`-${questionIndex}`)) {
+        if (answer.isCorrect) correctCount++;
+        else wrongCount++;
+      }
+    });
+    answerStats = [
+      { index: 0, text: 'Ordre correct', count: correctCount },
+      { index: 1, text: 'Ordre incorrect', count: wrongCount }
+    ];
+  }
 
   // Classement actuel
   const leaderboard = Array.from(game.players.values())
@@ -297,12 +390,15 @@ function showQuestionResults(io, pin) {
     }));
 
   io.to(`game:${pin}`).emit('question:results', {
+    type: questionType,
     correctAnswers: question.answers
       .map((a, i) => a.isCorrect ? i : -1)
       .filter(i => i >= 0),
+    correctAnswer: question.correctAnswer, // Pour PUZZLE
     answerStats,
     leaderboard,
-    isLastQuestion: questionIndex === game.quiz.questions.length - 1
+    isLastQuestion: questionIndex === game.quiz.questions.length - 1,
+    isSurvey: questionType === 'SURVEY'
   });
 }
 

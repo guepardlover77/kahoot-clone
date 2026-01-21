@@ -7,6 +7,9 @@ datasource db {
   url      = "file:./kahoot.db"
 }
 
+// Note: SQLite ne supporte pas les enums, on utilise String
+// Types valides: MULTIPLE_CHOICE, TRUE_FALSE, SURVEY, PUZZLE, DRAG_DROP
+
 model Quiz {
   id          String     @id @default(cuid())
   title       String
@@ -18,13 +21,16 @@ model Quiz {
 }
 
 model Question {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   text          String
-  timeLimit     Int      @default(20)
-  points        Int      @default(1000)
+  timeLimit     Int     @default(20)
+  points        Int     @default(1000)
   order         Int
+  type          String  @default("MULTIPLE_CHOICE")
+  correctAnswer String? // Pour PUZZLE (réponse textuelle)
+  caseSensitive Boolean @default(false)
   quizId        String
-  quiz          Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  quiz          Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
   answers       Answer[]
 }
 

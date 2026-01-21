@@ -9,6 +9,7 @@ function CreateQuiz() {
   const [questions, setQuestions] = useState([
     {
       text: '',
+      type: 'MULTIPLE_CHOICE',
       timeLimit: 20,
       points: 1000,
       answers: [
@@ -26,6 +27,7 @@ function CreateQuiz() {
       ...questions,
       {
         text: '',
+        type: 'MULTIPLE_CHOICE',
         timeLimit: 20,
         points: 1000,
         answers: [
@@ -63,14 +65,32 @@ function CreateQuiz() {
       return;
     }
 
-    if (questions.some(q => q.answers.filter(a => a.text.trim()).length < 2)) {
-      alert('Chaque question doit avoir au moins 2 réponses');
-      return;
-    }
+    // Validation selon le type de question
+    for (const q of questions) {
+      const type = q.type || 'MULTIPLE_CHOICE';
 
-    if (questions.some(q => !q.answers.some(a => a.isCorrect && a.text.trim()))) {
-      alert('Chaque question doit avoir au moins une bonne réponse');
-      return;
+      if (type === 'PUZZLE') {
+        if (!q.correctAnswer || !q.correctAnswer.trim()) {
+          alert('Les questions Puzzle doivent avoir une r\u00e9ponse correcte');
+          return;
+        }
+      } else if (type !== 'SURVEY') {
+        // Pour MULTIPLE_CHOICE, TRUE_FALSE et DRAG_DROP
+        if ((q.answers || []).filter(a => a.text.trim()).length < 2) {
+          alert('Chaque question doit avoir au moins 2 r\u00e9ponses');
+          return;
+        }
+        if (type !== 'DRAG_DROP' && !(q.answers || []).some(a => a.isCorrect && a.text.trim())) {
+          alert('Chaque question (sauf sondage) doit avoir au moins une bonne r\u00e9ponse');
+          return;
+        }
+      } else {
+        // SURVEY
+        if ((q.answers || []).filter(a => a.text.trim()).length < 2) {
+          alert('Les sondages doivent avoir au moins 2 options');
+          return;
+        }
+      }
     }
 
     setSaving(true);

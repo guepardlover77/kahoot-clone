@@ -6,6 +6,9 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        kahoot: ['Montserrat', 'sans-serif'],
+      },
       colors: {
         kahoot: {
           red: '#e21b3c',

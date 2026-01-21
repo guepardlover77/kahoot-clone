@@ -32,6 +32,13 @@ function PlayerGame() {
   const [streak, setStreak] = useState(0);
   const [animateAnswer, setAnimateAnswer] = useState(false);
 
+  // Pour PUZZLE
+  const [textAnswer, setTextAnswer] = useState('');
+
+  // Pour DRAG_DROP
+  const [orderedItems, setOrderedItems] = useState([]);
+  const [draggedItem, setDraggedItem] = useState(null);
+
   useEffect(() => {
     if (!socket || !isConnected) return;
 
@@ -51,17 +58,26 @@ function PlayerGame() {
       setSelectedAnswer(null);
       setAnswerResult(null);
       setAnimateAnswer(false);
+      setTextAnswer('');
+      // Pour DRAG_DROP, initialiser avec les items m\u00e9lang\u00e9s
+      if (questionData.type === 'DRAG_DROP') {
+        setOrderedItems(questionData.answers.map(a => a.text));
+      } else {
+        setOrderedItems([]);
+      }
       setGameState('question');
     });
 
-    socket.on('player:answered', ({ isCorrect, points, totalScore, streak: newStreak }) => {
-      setAnswerResult({ isCorrect, points });
+    socket.on('player:answered', ({ isCorrect, points, totalScore, streak: newStreak, isSurvey }) => {
+      setAnswerResult({ isCorrect, points, isSurvey });
       setScore(totalScore);
       const currentStreak = newStreak || (isCorrect ? streak + 1 : 0);
       setStreak(currentStreak);
       setAnimateAnswer(true);
 
-      if (isCorrect) {
+      if (isSurvey) {
+        // Pas de feedback pour les sondages
+      } else if (isCorrect) {
         playCorrect();
         if (currentStreak >= 2) {
           setTimeout(() => playStreak(currentStreak), 300);
@@ -101,7 +117,7 @@ function PlayerGame() {
     socket.on('error', ({ message }) => {
       alert(message);
       if (gameState === 'nickname') {
-        // Rester sur la page pour réessayer
+        // Rester sur la page pour r\u00e9essayer
       } else {
         navigate('/');
       }
@@ -159,6 +175,43 @@ function PlayerGame() {
     socket.emit('player:answer', { pin, answerIndex });
   };
 
+  const submitTextAnswer = () => {
+    if (selectedAnswer !== null || timeLeft === 0 || !textAnswer.trim()) return;
+    playClick();
+    setSelectedAnswer(-1); // Marqueur pour indiquer qu'on a r\u00e9pondu
+    socket.emit('player:answer', { pin, textAnswer: textAnswer.trim() });
+  };
+
+  const submitOrderedAnswer = () => {
+    if (selectedAnswer !== null || timeLeft === 0) return;
+    playClick();
+    setSelectedAnswer(-1);
+    socket.emit('player:answer', { pin, orderedItems });
+  };
+
+  // Drag and drop handlers pour DRAG_DROP
+  const handleDragStart = (e, index) => {
+    setDraggedItem(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedItem === null || draggedItem === index) return;
+
+    const newItems = [...orderedItems];
+    const draggedText = newItems[draggedItem];
+    newItems.splice(draggedItem, 1);
+    newItems.splice(index, 0, draggedText);
+
+    setDraggedItem(index);
+    setOrderedItems(newItems);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+  };
+
   if (gameState === 'nickname') {
     return (
       <div className="min-h-screen bg-kahoot-purple flex items-center justify-center p-4 relative overflow-hidden">
@@ -211,10 +264,10 @@ function PlayerGame() {
             <div className="text-6xl font-black mb-4 animate-wiggle">{nickname}</div>
           </div>
           <p className="text-xl animate-fade-in" style={{ animationDelay: '0.3s' }}>
-            Vous êtes dans la partie !
+            Vous \u00eates dans la partie !
           </p>
           <p className="text-white/60 mt-2 animate-fade-in" style={{ animationDelay: '0.5s' }}>
-            En attente du début...
+            En attente du d\u00e9but...
           </p>
 
           <div className="mt-8 flex justify-center gap-3 waiting-dots">
@@ -224,7 +277,7 @@ function PlayerGame() {
           </div>
 
           <div className="mt-8 glass-card p-4 inline-block animate-fade-in" style={{ animationDelay: '0.7s' }}>
-            <p className="text-sm text-white/80">Préparez-vous à jouer !</p>
+            <p className="text-sm text-white/80">Pr\u00e9parez-vous \u00e0 jouer !</p>
           </div>
         </div>
       </div>
@@ -232,6 +285,24 @@ function PlayerGame() {
   }
 
   if (gameState === 'answered') {
+    // Sondage : affichage sp\u00e9cial
+    if (answerResult?.isSurvey) {
+      return (
+        <div className="min-h-screen bg-kahoot-blue flex items-center justify-center p-4 relative overflow-hidden">
+          <div className="text-center text-white relative z-10">
+            <svg className="w-32 h-32 mx-auto mb-4 animate-zoom-in" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <h1 className="text-4xl font-black mb-2 animate-bounce-in">R\u00e9ponse enregistr\u00e9e !</h1>
+            <p className="text-xl opacity-80">Merci pour votre participation</p>
+            <div className="mt-6 glass-card p-4 inline-block animate-fade-in">
+              <p className="text-sm opacity-80">Sondage - Pas de points</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className={`min-h-screen flex items-center justify-center p-4 relative overflow-hidden ${
         answerResult?.isCorrect ? 'bg-kahoot-green' : 'bg-kahoot-red'
@@ -259,8 +330,8 @@ function PlayerGame() {
               {streak >= 2 && (
                 <div className="mt-4 animate-streak-fire">
                   <span className="streak-badge bg-orange-500 px-4 py-2 rounded-full text-lg font-bold inline-flex items-center gap-2">
-                    <span className="text-2xl">🔥</span>
-                    Série de {streak} !
+                    <span className="text-2xl">&#128293;</span>
+                    S\u00e9rie de {streak} !
                   </span>
                 </div>
               )}
@@ -304,7 +375,7 @@ function PlayerGame() {
 
               {myRank <= 3 && (
                 <div className="mt-4 text-5xl animate-bounce">
-                  {myRank === 1 ? '🥇' : myRank === 2 ? '🥈' : '🥉'}
+                  {myRank === 1 ? '\ud83e\udd47' : myRank === 2 ? '\ud83e\udd48' : '\ud83e\udd49'}
                 </div>
               )}
             </div>
@@ -332,20 +403,20 @@ function PlayerGame() {
         <ParticleBackground />
 
         <div className="text-center text-white relative z-10">
-          <h1 className="text-4xl font-bold mb-8 animate-slide-down">Partie terminée !</h1>
+          <h1 className="text-4xl font-bold mb-8 animate-slide-down">Partie termin\u00e9e !</h1>
 
           <div className="card text-gray-800 p-8 animate-zoom-in">
             {myFinalRank?.rank <= 3 ? (
               <div className="mb-6">
                 <span className={`text-8xl ${myFinalRank.rank === 1 ? 'animate-crown-bounce inline-block' : 'animate-bounce inline-block'}`}>
-                  {myFinalRank.rank === 1 ? '🥇' : myFinalRank.rank === 2 ? '🥈' : '🥉'}
+                  {myFinalRank.rank === 1 ? '\ud83e\udd47' : myFinalRank.rank === 2 ? '\ud83e\udd48' : '\ud83e\udd49'}
                 </span>
               </div>
             ) : (
-              <div className="mb-4 text-6xl animate-wiggle">🎮</div>
+              <div className="mb-4 text-6xl animate-wiggle">\ud83c\udfae</div>
             )}
 
-            <p className="text-xl mb-2">Vous avez terminé</p>
+            <p className="text-xl mb-2">Vous avez termin\u00e9</p>
             <p className={`text-6xl font-black mb-4 ${
               myFinalRank?.rank === 1 ? 'text-yellow-500' :
               myFinalRank?.rank === 2 ? 'text-gray-500' :
@@ -367,14 +438,167 @@ function PlayerGame() {
             className="btn btn-primary mt-8 btn-glow ripple animate-fade-in"
             style={{ animationDelay: '0.5s' }}
           >
-            Retour à l'accueil
+            Retour \u00e0 l'accueil
           </button>
         </div>
       </div>
     );
   }
 
-  // Question state
+  // Question state - render based on question type
+  const questionType = question?.type || 'MULTIPLE_CHOICE';
+
+  const renderQuestionUI = () => {
+    switch (questionType) {
+      case 'TRUE_FALSE':
+        return (
+          <div className="flex-1 grid grid-cols-2 gap-4 relative z-10">
+            <button
+              onClick={() => submitAnswer(0)}
+              disabled={selectedAnswer !== null || timeLeft === 0}
+              className={`answer-btn bg-kahoot-green ${
+                selectedAnswer === 0 ? 'ring-4 ring-white scale-95' : ''
+              } flex items-center justify-center gap-2 ripple relative overflow-hidden group text-3xl
+              ${selectedAnswer === null && timeLeft > 0 ? 'hover:brightness-110' : ''}`}
+            >
+              <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all duration-200" />
+              Vrai
+              {selectedAnswer === 0 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <div className="w-8 h-8 border-4 border-white rounded-full border-t-transparent animate-spin" />
+                </div>
+              )}
+            </button>
+            <button
+              onClick={() => submitAnswer(1)}
+              disabled={selectedAnswer !== null || timeLeft === 0}
+              className={`answer-btn bg-kahoot-red ${
+                selectedAnswer === 1 ? 'ring-4 ring-white scale-95' : ''
+              } flex items-center justify-center gap-2 ripple relative overflow-hidden group text-3xl
+              ${selectedAnswer === null && timeLeft > 0 ? 'hover:brightness-110' : ''}`}
+            >
+              <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all duration-200" />
+              Faux
+              {selectedAnswer === 1 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <div className="w-8 h-8 border-4 border-white rounded-full border-t-transparent animate-spin" />
+                </div>
+              )}
+            </button>
+          </div>
+        );
+
+      case 'PUZZLE':
+        return (
+          <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-4">
+            <div className="w-full max-w-md">
+              <input
+                type="text"
+                value={textAnswer}
+                onChange={(e) => setTextAnswer(e.target.value)}
+                disabled={selectedAnswer !== null || timeLeft === 0}
+                className="w-full px-6 py-4 text-2xl text-center rounded-xl border-4 border-white/30 bg-white/10 text-white placeholder-white/50 focus:border-white focus:outline-none"
+                placeholder="Tapez votre r\u00e9ponse..."
+                autoFocus
+                onKeyPress={(e) => e.key === 'Enter' && submitTextAnswer()}
+              />
+              <button
+                onClick={submitTextAnswer}
+                disabled={selectedAnswer !== null || timeLeft === 0 || !textAnswer.trim()}
+                className="btn btn-success w-full mt-4 text-xl py-4 ripple btn-glow"
+              >
+                {selectedAnswer !== null ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-6 h-6 border-4 border-white rounded-full border-t-transparent animate-spin" />
+                    Envoy\u00e9...
+                  </span>
+                ) : (
+                  'Valider'
+                )}
+              </button>
+            </div>
+          </div>
+        );
+
+      case 'DRAG_DROP':
+        return (
+          <div className="flex-1 flex flex-col items-center justify-center relative z-10 px-4">
+            <div className="w-full max-w-md space-y-3">
+              <p className="text-white text-center mb-4">Glissez pour r\u00e9ordonner</p>
+              {orderedItems.map((item, index) => (
+                <div
+                  key={index}
+                  draggable={selectedAnswer === null && timeLeft > 0}
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragEnd={handleDragEnd}
+                  className={`${answerColors[index % 4]} rounded-xl p-4 flex items-center gap-3 cursor-move transition-all ${
+                    draggedItem === index ? 'opacity-50 scale-95' : ''
+                  } ${selectedAnswer !== null ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                  <div className="text-white/70">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
+                    </svg>
+                  </div>
+                  <span className="text-white font-bold text-lg">{index + 1}.</span>
+                  <span className="text-white font-bold text-xl flex-1">{item}</span>
+                </div>
+              ))}
+              <button
+                onClick={submitOrderedAnswer}
+                disabled={selectedAnswer !== null || timeLeft === 0}
+                className="btn btn-success w-full mt-4 text-xl py-4 ripple btn-glow"
+              >
+                {selectedAnswer !== null ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-6 h-6 border-4 border-white rounded-full border-t-transparent animate-spin" />
+                    Envoy\u00e9...
+                  </span>
+                ) : (
+                  'Valider l\'ordre'
+                )}
+              </button>
+            </div>
+          </div>
+        );
+
+      case 'SURVEY':
+      case 'MULTIPLE_CHOICE':
+      default:
+        return (
+          <div className="flex-1 grid grid-cols-2 gap-3 relative z-10">
+            {question?.answers.map((answer, i) => (
+              <button
+                key={i}
+                onClick={() => submitAnswer(i)}
+                disabled={selectedAnswer !== null || timeLeft === 0}
+                className={`answer-btn ${answerColors[i]} ${
+                  selectedAnswer === i ? 'ring-4 ring-white scale-95' : ''
+                } flex items-center justify-center gap-2 ripple relative overflow-hidden group
+                ${selectedAnswer === null && timeLeft > 0 ? 'hover:brightness-110' : ''}`}
+                style={{
+                  animationDelay: `${i * 0.1}s`,
+                }}
+              >
+                {/* Hover effect */}
+                <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all duration-200" />
+
+                <Shape type={answerShapes[i]} />
+
+                {/* Selection indicator */}
+                {selectedAnswer === i && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <div className="w-8 h-8 border-4 border-white rounded-full border-t-transparent animate-spin" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-kahoot-dark p-4 flex flex-col relative overflow-hidden">
       <SoundToggle className="absolute top-4 right-4 z-20" />
@@ -393,6 +617,17 @@ function PlayerGame() {
       <div className="text-center mb-4 relative z-10">
         <CircularTimer timeLeft={timeLeft} totalTime={totalTime} size={100} />
 
+        {/* Question type badge */}
+        <div className="mt-2">
+          <span className="bg-white/20 text-white px-3 py-1 rounded-full text-sm font-medium">
+            {questionType === 'TRUE_FALSE' && 'Vrai / Faux'}
+            {questionType === 'SURVEY' && 'Sondage'}
+            {questionType === 'PUZZLE' && 'Puzzle'}
+            {questionType === 'DRAG_DROP' && 'Glisser-d\u00e9poser'}
+            {questionType === 'MULTIPLE_CHOICE' && 'Choix multiple'}
+          </span>
+        </div>
+
         {/* Progress bar */}
         <div className="mt-4 progress-bar max-w-xs mx-auto">
           <div
@@ -402,38 +637,11 @@ function PlayerGame() {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-2 gap-3 relative z-10">
-        {question?.answers.map((answer, i) => (
-          <button
-            key={i}
-            onClick={() => submitAnswer(i)}
-            disabled={selectedAnswer !== null || timeLeft === 0}
-            className={`answer-btn ${answerColors[i]} ${
-              selectedAnswer === i ? 'ring-4 ring-white scale-95' : ''
-            } flex items-center justify-center gap-2 ripple relative overflow-hidden group
-            ${selectedAnswer === null && timeLeft > 0 ? 'hover:brightness-110' : ''}`}
-            style={{
-              animationDelay: `${i * 0.1}s`,
-            }}
-          >
-            {/* Hover effect */}
-            <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all duration-200" />
-
-            <Shape type={answerShapes[i]} />
-
-            {/* Selection indicator */}
-            {selectedAnswer === i && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                <div className="w-8 h-8 border-4 border-white rounded-full border-t-transparent animate-spin" />
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
+      {renderQuestionUI()}
 
       {timeLeft === 0 && selectedAnswer === null && (
         <div className="text-center mt-4 text-white relative z-10 animate-fade-in">
-          <p className="text-2xl font-bold animate-pulse">Temps écoulé !</p>
+          <p className="text-2xl font-bold animate-pulse">Temps \u00e9coul\u00e9 !</p>
         </div>
       )}
     </div>
