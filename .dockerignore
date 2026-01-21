@@ -1,0 +1,13 @@
+node_modules
+client/node_modules
+server/node_modules
+client/dist
+*.db
+*.db-journal
+.git
+.gitignore
+*.md
+.env
+.env.*
+.idea
+.vscode
