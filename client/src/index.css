@@ -61,7 +61,8 @@ body {
   }
 
   .progress-bar-fill {
-    @apply h-full rounded-full transition-all duration-1000 linear;
+    @apply h-full rounded-full transition-all duration-1000;
+    transition-timing-function: linear;
   }
 
   .glass-card {
